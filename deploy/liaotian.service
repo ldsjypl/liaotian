@@ -1,0 +1,24 @@
+[Unit]
+Description=liaotian - multi-room chat server for ldsjypl.online
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lin
+Group=lin
+WorkingDirectory=/home/lin/fuwuqi/liaotian
+ExecStart=/home/lin/fuwuqi/liaotian/bin/liaotian --port 8081 --bind 127.0.0.1 --web ./web --data ./data --room-ttl 120 --max-rooms 50 --max-users 30 --max-conns 128
+Restart=always
+RestartSec=2
+LimitNOFILE=4096
+# 512MB 内存的板子，给进程一个硬上限，异常时不至于拖垮整机
+MemoryMax=96M
+MemoryHigh=64M
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

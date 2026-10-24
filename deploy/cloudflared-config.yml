@@ -1,0 +1,16 @@
+tunnel: a22e3a1d-c6af-4f40-b355-6f2fca673600
+credentials-file: /root/.cloudflared/a22e3a1d-c6af-4f40-b355-6f2fca673600.json
+
+# 所有流量交给本机 nginx 的 8082 明文入口，由它再分流到聊天服务 / 旧演示页
+ingress:
+  - hostname: ldsjypl.online
+    service: http://127.0.0.1:8082
+    originRequest:
+      connectTimeout: 10s
+      noHappyEyeballs: true
+      keepAliveConnections: 8
+      keepAliveTimeout: 90s
+  - service: http_status:404
+
+no-autoupdate: true
+metrics: 127.0.0.1:20241

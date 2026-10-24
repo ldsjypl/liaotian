@@ -1,0 +1,7 @@
+[Unit]
+Description=liaotian watchdog (chat + nginx + wifi + ddns)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lt-watchdog.sh

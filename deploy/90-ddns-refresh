@@ -1,0 +1,13 @@
+#!/bin/sh
+# NetworkManager dispatcher: push DDNS the moment the uplink comes back.
+# Without this, a new IPv6 prefix can take minutes to reach DNS.
+case "${2:-}" in
+    up)
+        case "${1:-}" in
+            wlan0|eth0)
+                /usr/bin/systemctl restart ddns-go >/dev/null 2>&1 &
+                ;;
+        esac
+        ;;
+esac
+exit 0

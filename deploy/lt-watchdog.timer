@@ -1,0 +1,11 @@
+[Unit]
+Description=Run liaotian watchdog periodically
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=120
+AccuracySec=10
+Unit=lt-watchdog.service
+
+[Install]
+WantedBy=timers.target

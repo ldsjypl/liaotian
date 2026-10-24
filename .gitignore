@@ -1,0 +1,14 @@
+bin/
+build/
+data/
+*.o
+*.obj
+*.tgz
+*.tar.gz
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+deploy/room-key.txt
+
