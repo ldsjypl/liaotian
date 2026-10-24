@@ -257,11 +257,15 @@
         showLobby();
         toast('已离开房间');
         break;
+      case 'closed':
+        showLobby();
+        toast('房间已被管理员关闭');
+        break;
       case 'error':
         S.busy = false;
         lobbyErr.textContent = msg.text || '';
         toast(msg.text || '出错了');
-        if (/房间不存在|房间已满|房间数量/.test(msg.text || '')) showLobby();
+        if (/房间不存在|房间已满|房间数量|移出房间/.test(msg.text || '')) showLobby();
         break;
       default:
         break;

@@ -60,6 +60,26 @@ std::string Room::name_of(int fd) const {
     return std::string();
 }
 
+std::vector<std::string> Room::names() const {
+    std::vector<std::string> out;
+    out.reserve(members_.size());
+    for (const Member& m : members_) out.push_back(m.name);
+    return out;
+}
+
+int Room::fd_of(const std::string& name) const {
+    for (const Member& m : members_)
+        if (m.name == name) return m.fd;
+    return -1;
+}
+
+std::vector<int> Room::member_fds() const {
+    std::vector<int> out;
+    out.reserve(members_.size());
+    for (const Member& m : members_) out.push_back(m.fd);
+    return out;
+}
+
 std::string Room::users_json() const {
     std::string out = "[";
     for (size_t i = 0; i < members_.size(); ++i) {

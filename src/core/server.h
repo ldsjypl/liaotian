@@ -4,8 +4,10 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "../chat/hub.h"
+#include "admin.h"
 #include "../net/websocket.h"
 #include "http.h"
 
@@ -15,7 +17,7 @@ class Server {
 public:
     Server(int port, std::string bind_addr, std::string webdir, std::string datadir,
            std::string key, uint64_t room_ttl_ms, int max_conns, size_t max_rooms,
-           size_t max_users);
+           size_t max_users, std::string admin_sock);
     ~Server();
 
     bool init();
@@ -60,6 +62,9 @@ private:
     bool running_ = false;
     std::unordered_map<int, Conn> conns_;
     Hub hub_;
+    Admin admin_;
+    int admin_lfd_ = -1;
+    std::unordered_set<int> admin_conns_;
     uint64_t started_ms_ = 0;
     uint64_t room_ttl_ms_ = 120000;
     int max_conns_ = 128;

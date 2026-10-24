@@ -368,3 +368,12 @@ button:active { transform: translateY(1px); }
   min-height: 17px;
   margin: 6px 0 0;
 }
+
+.warn {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(248,81,73,.25);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #d9847d;
+}

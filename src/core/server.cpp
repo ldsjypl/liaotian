@@ -32,10 +32,11 @@ constexpr int kIdleHttpMs = 15000;
 
 Server::Server(int port, std::string bind_addr, std::string webdir, std::string datadir,
                std::string key, uint64_t room_ttl_ms, int max_conns, size_t max_rooms,
-               size_t max_users)
+               size_t max_users, std::string admin_sock)
     : port_(port), bind_addr_(std::move(bind_addr)), webdir_(std::move(webdir)),
       key_(std::move(key)),
-      hub_(std::move(datadir), 100, room_ttl_ms, max_rooms, max_users) {
+      hub_(std::move(datadir), 100, room_ttl_ms, max_rooms, max_users),
+      admin_(hub_, std::move(admin_sock)) {
     room_ttl_ms_ = room_ttl_ms;
     max_conns_ = max_conns > 0 ? max_conns : 128;
 }
@@ -88,6 +89,15 @@ bool Server::init() {
     ev.events = EPOLLIN;
     ev.data.fd = lfd_;
     ::epoll_ctl(ep_, EPOLL_CTL_ADD, lfd_, &ev);
+
+    admin_lfd_ = admin_.open();
+    if (admin_lfd_ >= 0) {
+        epoll_event aev{};
+        aev.events = EPOLLIN;
+        aev.data.fd = admin_lfd_;
+        ::epoll_ctl(ep_, EPOLL_CTL_ADD, admin_lfd_, &aev);
+        admin_conns_.insert(admin_lfd_);
+    }
 
     started_ms_ = mono_ms();
     std::fprintf(stderr, "liaotian listening on %s:%d web=%s key=%s rooms_ttl=%llus\n",
@@ -161,6 +171,30 @@ void Server::update_events(Conn& c) {
 }
 
 void Server::on_event(int fd, uint32_t ev) {
+    if (fd == admin_lfd_) {
+        for (int c : admin_.accept_all()) {
+            epoll_event aev{};
+            aev.events = EPOLLIN | EPOLLRDHUP;
+            aev.data.fd = c;
+            ::epoll_ctl(ep_, EPOLL_CTL_ADD, c, &aev);
+            admin_conns_.insert(c);
+        }
+        return;
+    }
+    if (admin_conns_.count(fd)) {
+        bool keep = admin_.on_readable(fd);
+        if (!keep) {
+            ::epoll_ctl(ep_, EPOLL_CTL_DEL, fd, nullptr);
+            ::close(fd);
+            admin_conns_.erase(fd);
+            admin_.forget(fd);
+        }
+        for (int victim : admin_.take_pending()) {
+            if (conns_.count(victim)) close_conn(victim);
+        }
+        return;
+    }
+
     auto it = conns_.find(fd);
     if (it == conns_.end()) return;
     Conn& c = it->second;

@@ -31,6 +31,7 @@ void usage(const char* argv0) {
                  "  --max-conns N    max simultaneous connections (default 128)\n"
                  "  --max-rooms N    max live rooms (default 50)\n"
                  "  --max-users N    max users per room (default 30)\n"
+                 "  --admin-sock P   unix socket for the local admin CLI (default /run/liaotian/admin.sock)\n"
                  "  -h, --help       this text\n",
                  argv0);
 }
@@ -72,6 +73,7 @@ int main(int argc, char** argv) {
     int max_conns = 128;
     int max_rooms = 50;
     int max_users = 30;
+    std::string admin_sock = "/run/liaotian/admin.sock";
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -94,6 +96,8 @@ int main(int argc, char** argv) {
             key = need_value("--key");
         } else if (a == "--room-ttl") {
             room_ttl_sec = std::atoi(need_value("--room-ttl").c_str());
+        } else if (a == "--admin-sock") {
+            admin_sock = need_value("--admin-sock");
         } else if (a == "--max-conns") {
             max_conns = std::atoi(need_value("--max-conns").c_str());
         } else if (a == "--max-rooms") {
@@ -125,7 +129,8 @@ int main(int argc, char** argv) {
 
     lt::Server server(port, bind_addr, webdir, datadir, key,
                       static_cast<uint64_t>(room_ttl_sec) * 1000, max_conns,
-                      static_cast<size_t>(max_rooms), static_cast<size_t>(max_users));
+                      static_cast<size_t>(max_rooms), static_cast<size_t>(max_users),
+                      admin_sock);
     g_server = &server;
     if (!server.init()) return 1;
 

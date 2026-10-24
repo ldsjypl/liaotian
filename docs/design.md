@@ -108,6 +108,19 @@ WebSocket 文本帧承载 JSON，一条连接可先后经历"大厅 → 房间 �
 - 房间销毁时 `unlink`，不留下垃圾；
 - 掉电最多丢最后半条，读取时跳过解析不完整的行。
 
+## 7.5 管理通道
+
+管理员功能走 **Unix domain socket**（`/run/liaotian/admin.sock`），由同一个 epoll
+循环轮询，不占用网络端口、不经过 Cloudflare：
+
+- 目录 `RuntimeDirectory=liaotian`（0700），socket 文件 `chmod 0600`，属主 `lin`
+- 一次连接一条命令，服务端回文本后关闭，CLI 就是 `nc -U` 的一行包装
+- `read` 直接读内存里的消息环形缓冲，不 join 房间，所以用户无感知
+- `kick` / `close` 通过 `Hub` 返回待关闭的 fd，由 `Server::close_conn()` 统一收尾，
+  避免在协议层直接 close 造成事件循环里的悬空引用
+
+命令解析、HTTP 和聊天协议分属 `core/admin.cpp`、`core/http.cpp`、`chat/hub.cpp`，
+三者互不包含对方的头文件。
 ## 8. 前端结构
 
 单页两屏：`#lobby`（昵称 / 新建 / 房号加入 / 房间列表 / 使用说明）与 `#chat`。

@@ -116,6 +116,32 @@ make -j4          # 产出 bin/liaotian，约 106KB
 | GET | `/api/history?room=482913&limit=50` | 某房间最近消息（最大 200） |
 | GET | `/ws` | WebSocket 升级 |
 
+## 管理员命令（仅本机）
+
+管理通道是 **Unix socket**，不监听任何网络端口：`/run/liaotian/admin.sock`，
+目录 `0700`、socket 文件 `0600`，只有板子上的 `lin` 和 `root` 能连。公网无法访问。
+
+```bash
+sudo lt-admin                      # 直接回车看帮助（交互式，Ctrl-D 退出）
+lt-admin rooms                     # 所有房间：房号 / 人数 / 消息数 / 成员
+lt-admin users 482913              # 某房间的在线用户
+lt-admin read  482913 50           # 看最近 50 条（不会通知用户，不算"加入"）
+lt-admin kick  482913 小林         # 把某人移出房间
+lt-admin close 482913              # 立即关闭房间 + 删除记录 + 断开所有人
+```
+
+示例输出：
+
+```
+$ lt-admin rooms
+房号      人数  消息  成员
+482913      2      7  小林, 阿伟
+947695      0      4  -
+共 2 个房间
+```
+
+`read` 是纯读取，房间里的用户看不到任何"管理员进入"的提示；`kick` 会给对方
+发一条"你已被管理员移出房间"然后断开；`close` 会让所有人回到大厅并清空记录。
 ## 部署
 
 ```bash

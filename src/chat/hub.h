@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "room.h"
 
@@ -32,6 +33,21 @@ public:
     size_t room_count() const { return rooms_.size(); }
     size_t active_rooms() const;
     size_t online() const { return where_.size(); }
+
+    // ---- 管理接口（只给本机 admin socket 用）----
+    struct RoomInfo {
+        std::string id;
+        size_t users = 0;
+        size_t msgs = 0;
+        std::string names;
+    };
+    std::vector<RoomInfo> rooms_info() const;
+    std::vector<std::string> users_of(const std::string& room_id) const;
+    std::string history_text(const std::string& room_id, size_t limit) const;
+    int find_user(const std::string& room_id, const std::string& name) const;
+    int kick_user(const std::string& room_id, const std::string& name);
+    std::vector<int> close_room(const std::string& room_id);
+    void send_to(int fd, const std::string& json) { send(fd, json); }
 
 private:
     struct Rate {

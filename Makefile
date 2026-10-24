@@ -5,6 +5,7 @@ LDFLAGS  ?=
 SRC := src/main.cpp \
        src/core/server.cpp \
        src/core/http.cpp \
+       src/core/admin.cpp \
        src/net/websocket.cpp \
        src/storage/message_log.cpp \
        src/chat/room.cpp \

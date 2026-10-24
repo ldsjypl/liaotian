@@ -8,10 +8,13 @@ Type=simple
 User=lin
 Group=lin
 WorkingDirectory=/home/lin/fuwuqi/liaotian
-ExecStart=/home/lin/fuwuqi/liaotian/bin/liaotian --port 8081 --bind 127.0.0.1 --web ./web --data ./data --room-ttl 120 --max-rooms 50 --max-users 30 --max-conns 128
+ExecStart=/home/lin/fuwuqi/liaotian/bin/liaotian --port 8081 --bind 127.0.0.1 --web ./web --data ./data --room-ttl 120 --max-rooms 50 --max-users 30 --max-conns 128 --admin-sock /run/liaotian/admin.sock
 Restart=always
 RestartSec=2
 LimitNOFILE=4096
+# 管理员 socket 放这里：目录 0700，只有 lin 和 root 能进
+RuntimeDirectory=liaotian
+RuntimeDirectoryMode=0700
 # 512MB 内存的板子，给进程一个硬上限，异常时不至于拖垮整机
 MemoryMax=96M
 MemoryHigh=64M

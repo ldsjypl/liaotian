@@ -1,6 +1,7 @@
 #include "hub.h"
 
 #include <cstdio>
+#include <ctime>
 #include <deque>
 #include <vector>
 
@@ -264,6 +265,85 @@ size_t Hub::active_rooms() const {
     for (const auto& kv : rooms_) if (kv.second->user_count() > 0) ++n;
     return n;
 }
+std::vector<Hub::RoomInfo> Hub::rooms_info() const {
+    std::vector<RoomInfo> out;
+    for (const auto& kv : rooms_) {
+        const Room& r = *kv.second;
+        RoomInfo info;
+        info.id = r.id();
+        info.users = r.user_count();
+        info.msgs = r.msg_count();
+        bool first = true;
+        for (const std::string& n : r.names()) {
+            if (!first) info.names += ", ";
+            info.names += n;
+            first = false;
+        }
+        if (info.names.empty()) info.names = "-";
+        out.push_back(std::move(info));
+    }
+    return out;
+}
+
+std::vector<std::string> Hub::users_of(const std::string& room_id) const {
+    auto it = rooms_.find(room_id);
+    if (it == rooms_.end()) return {};
+    return it->second->names();
+}
+
+std::string Hub::history_text(const std::string& room_id, size_t limit) const {
+    auto it = rooms_.find(room_id);
+    if (it == rooms_.end()) return "房间不存在\n";
+    const std::deque<Msg>& msgs = it->second->messages();
+    size_t start = msgs.size() > limit ? msgs.size() - limit : 0;
+    std::string out;
+    char stamp[32];
+    for (size_t i = start; i < msgs.size(); ++i) {
+        time_t t = static_cast<time_t>(msgs[i].ts);
+        struct tm tmv {};
+        localtime_r(&t, &tmv);
+        std::strftime(stamp, sizeof(stamp), "%m-%d %H:%M", &tmv);
+        out += std::string("[") + stamp + "] " + msgs[i].from + ": " + msgs[i].text + "\n";
+    }
+    if (out.empty()) out = "(没有消息)\n";
+    return out;
+}
+
+int Hub::find_user(const std::string& room_id, const std::string& name) const {
+    auto it = rooms_.find(room_id);
+    if (it == rooms_.end()) return -1;
+    return it->second->fd_of(name);
+}
+
+int Hub::kick_user(const std::string& room_id, const std::string& name) {
+    auto it = rooms_.find(room_id);
+    if (it == rooms_.end()) return -1;
+    Room& r = *it->second;
+    int fd = r.fd_of(name);
+    if (fd < 0) return -1;
+    send(fd, "{\"type\":\"error\",\"text\":\"你已被管理员移出房间\"}");
+    leave(fd, true);
+    return fd;
+}
+
+std::vector<int> Hub::close_room(const std::string& room_id) {
+    std::vector<int> fds;
+    auto it = rooms_.find(room_id);
+    if (it == rooms_.end()) return fds;
+    Room& r = *it->second;
+    fds = r.member_fds();
+    std::string notice = "{\"type\":\"closed\",\"room\":\"" + room_id + "\"}";
+    for (int fd : fds) {
+        send(fd, notice);
+        where_.erase(fd);
+        rate_.erase(fd);
+    }
+    r.destroy();
+    rooms_.erase(it);
+    std::fprintf(stderr, "admin closed room %s (%zu users)\n", room_id.c_str(), fds.size());
+    return fds;
+}
+
 std::string Hub::history_json(const std::string& room_id, size_t limit) const {
     auto it = rooms_.find(room_id);
     if (it == rooms_.end()) return "[]";

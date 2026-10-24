@@ -1,0 +1,26 @@
+#!/bin/sh
+# lt-admin - 本机管理命令行（只监听 unix socket，不经网络）
+#
+#   lt-admin                     进入交互提示（Ctrl-D 退出）
+#   lt-admin rooms               列出所有房间
+#   lt-admin users 482913        列出房间成员
+#   lt-admin read 482913 50      查看最近 50 条（不会通知用户）
+#   lt-admin kick 482913 小林    把某人移出房间
+#   lt-admin close 482913        关闭房间并删除记录
+#
+# 需要与 liaotian 服务同一用户（或 root）才能连上 socket。
+set -u
+
+SOCK="${LT_ADMIN_SOCK:-/run/liaotian/admin.sock}"
+
+if [ ! -S "$SOCK" ]; then
+    echo "管理通道未开启：$SOCK 不存在" >&2
+    echo "检查 systemd 单元里的 RuntimeDirectory 与 --admin-sock 参数" >&2
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    exec nc -N -w 600 -U "$SOCK"
+fi
+
+printf '%s\n' "$*" | nc -N -w 10 -U "$SOCK"

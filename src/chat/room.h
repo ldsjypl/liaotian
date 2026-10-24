@@ -22,6 +22,9 @@ public:
     bool remove_member(int fd);
     bool has_member(int fd) const;
     std::string name_of(int fd) const;
+    int fd_of(const std::string& name) const;
+    std::vector<int> member_fds() const;
+    std::vector<std::string> names() const;
 
     bool empty() const { return members_.empty(); }
     size_t user_count() const { return members_.size(); }
@@ -29,6 +32,8 @@ public:
     std::string meta_json() const;
 
     long append_message(const std::string& from, const std::string& text, int64_t ts);
+    const std::deque<Msg>& messages() const { return log_.recent(); }
+    size_t msg_count() const { return log_.size(); }
     std::string history_json(size_t limit) const { return log_.json(limit); }
 
     // Empty-room bookkeeping used by the reaper.
