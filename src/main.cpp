@@ -5,6 +5,9 @@
 #include <cstring>
 #include <string>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <cstring>
 
 #include "core/server.h"
 
@@ -30,6 +33,31 @@ void usage(const char* argv0) {
                  "  --max-users N    max users per room (default 30)\n"
                  "  -h, --help       this text\n",
                  argv0);
+}
+
+}  // namespace
+
+namespace {
+
+// 房间只在有人时存在，所以进程启动时目录里残留的 <6位房号>.jsonl 一定是
+// 上次异常退出留下的孤儿文件，直接清掉，避免长期堆积。
+void reap_orphan_rooms(const std::string& dir) {
+    DIR* d = ::opendir(dir.c_str());
+    if (!d) return;
+    int removed = 0;
+    while (dirent* e = ::readdir(d)) {
+        std::string name = e->d_name;
+        size_t dot = name.rfind(".jsonl");
+        if (dot == std::string::npos || dot != name.size() - 6) continue;
+        if (dot != 6) continue;
+        bool digits = true;
+        for (size_t i = 0; i < 6; ++i)
+            if (name[i] < '0' || name[i] > '9') { digits = false; break; }
+        if (!digits) continue;
+        if (::unlink((dir + "/" + name).c_str()) == 0) ++removed;
+    }
+    ::closedir(d);
+    if (removed) std::fprintf(stderr, "cleaned %d orphan room file(s) in %s\n", removed, dir.c_str());
 }
 
 }  // namespace
@@ -92,6 +120,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    reap_orphan_rooms(datadir);
     std::signal(SIGPIPE, SIG_IGN);
 
     lt::Server server(port, bind_addr, webdir, datadir, key,
