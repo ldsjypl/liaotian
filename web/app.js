@@ -11,6 +11,7 @@
   const createBtn = $('createBtn');
   const joinBtn = $('joinBtn');
   const lobbyErr = $('lobbyErr');
+  const lobbyStatus = $('lobbyStatus');
   const roomTitle = $('roomTitle');
   const onlineEl = $('online');
   const usersBtn = $('usersBtn');
@@ -34,7 +35,8 @@
     retry: 0,
     reconnectTimer: null,
     pingTimer: null,
-    pending: null,      // 首次连接成功后要执行的动作
+    pending: null,   // 首次连接成功后要执行的动作
+    busy: false,     // 防止连点重复建房
     manualClose: false,
     key: params.get('k') || '',
   };
@@ -51,6 +53,9 @@
   function scrollDown(force) {
     if (force || nearBottom()) messages.scrollTop = messages.scrollHeight;
   }
+  function setLobbyStatus(text) {
+    if (lobbyStatus) lobbyStatus.textContent = text || '';
+  }
   let toastTimer = null;
   function toast(text) {
     toastEl.textContent = text;
@@ -65,6 +70,7 @@
     lobby.hidden = false;
     S.room = '';
     S.joined = false;
+    S.busy = false;
     S.users = [];
   }
 
@@ -73,6 +79,7 @@
     chat.hidden = false;
     S.room = msg.room;
     S.joined = true;
+    S.busy = false;
     S.name = msg.name;
     localStorage.setItem('lt.name', msg.name);
     localStorage.setItem('lt.room', msg.room);
@@ -82,8 +89,11 @@
     (msg.history || []).forEach(addMessage);
     setUsers(msg.users || []);
     setStatus('on', '');
-    if (msg.created) addSys('房间已创建，房号 ' + msg.room + '。房号不公开，想邀请谁就把这串数字发给谁');
-    else addSys('已进入 ' + msg.room + '，共 ' + (msg.history || []).length + ' 条历史消息');
+    if (msg.created) {
+      addSys('房间已创建，房号 ' + msg.room + '。房号不公开，想邀请谁就把这串数字发给谁');
+    } else {
+      addSys('已进入 ' + msg.room + '，共 ' + (msg.history || []).length + ' 条历史消息');
+    }
     scrollDown(true);
     input.focus();
   }
@@ -152,16 +162,30 @@
 
   function connect() {
     clearTimeout(S.reconnectTimer);
+
     let ws;
     try {
       ws = new WebSocket(wsUrl());
     } catch (e) {
+      S.busy = false;
+      setLobbyStatus('无法建立连接，正在重试…');
       scheduleReconnect();
       return;
     }
     S.ws = ws;
 
+    // 8 秒还没连上就放弃这一次，给用户明确反馈，而不是一直"没反应"
+    const connectTimer = setTimeout(() => {
+      if (ws.readyState !== 1) {
+        try { ws.close(); } catch (e) { /* ignore */ }
+        S.busy = false;
+        setLobbyStatus('连接服务器超时，正在重试…');
+      }
+    }, 8000);
+
     ws.onopen = () => {
+      clearTimeout(connectTimer);
+      setLobbyStatus('');
       S.retry = 0;
       clearInterval(S.pingTimer);
       S.pingTimer = setInterval(() => {
@@ -183,9 +207,12 @@
     };
 
     ws.onclose = () => {
+      clearTimeout(connectTimer);
       clearInterval(S.pingTimer);
       S.joined = false;
+      S.busy = false;
       setStatus('off', '连接断开，正在重连…');
+      if (!S.room) setLobbyStatus('连不上服务器，正在重试…');
       if (!S.manualClose) scheduleReconnect();
       S.manualClose = false;
     };
@@ -213,6 +240,8 @@
   function onMessage(msg) {
     switch (msg.type) {
       case 'joined':
+        S.busy = false;
+        setLobbyStatus('');
         showChat(msg);
         break;
       case 'msg':
@@ -229,6 +258,7 @@
         toast('已离开房间');
         break;
       case 'error':
+        S.busy = false;
         lobbyErr.textContent = msg.text || '';
         toast(msg.text || '出错了');
         if (/房间不存在|房间已满|房间数量/.test(msg.text || '')) showLobby();
@@ -253,12 +283,21 @@
   }
 
   function createRoom() {
+    if (S.busy) return;
     const n = currentName();
     if (!n) return;
-    ensureConnected(() => send({ type: 'create', name: n }));
+    S.busy = true;
+    setLobbyStatus('正在连接服务器…');
+    ensureConnected(() => {
+      if (!send({ type: 'create', name: n })) {
+        S.busy = false;
+        setLobbyStatus('连接还没就绪，请再点一次');
+      }
+    });
   }
 
   function joinRoom() {
+    if (S.busy) return;
     const n = currentName();
     if (!n) return;
     const r = (roomInput.value || '').trim();
@@ -267,8 +306,15 @@
       roomInput.focus();
       return;
     }
+    S.busy = true;
     lobbyErr.textContent = '';
-    ensureConnected(() => send({ type: 'join', room: r, name: n }));
+    setLobbyStatus('正在连接服务器…');
+    ensureConnected(() => {
+      if (!send({ type: 'join', room: r, name: n })) {
+        S.busy = false;
+        setLobbyStatus('连接还没就绪，请再点一次');
+      }
+    });
   }
 
   createBtn.addEventListener('click', createRoom);
