@@ -3,15 +3,13 @@ package online.ldsjypl.chat;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.util.Log;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.WindowInsets;
+import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,14 +31,21 @@ public class MainActivity extends Activity {
     private final ChatAdapter adapter = new ChatAdapter();
     private final SimpleDateFormat hhmm = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
+    /** 当前唯一的一条连接，任何时刻只允许存在一个。 */
     private volatile WsClient ws;
+    private volatile boolean connecting = false;
     private volatile boolean manualClose = false;
     private volatile boolean joined = false;
+    /** 连接代号：旧连接迟到的回调靠它丢弃。 */
+    private volatile long connGen = 0;
+
     private int retry = 0;
     private Runnable pendingAction;
     private Runnable lastJoinAction;
     private Runnable joinRetryTask;
     private Runnable pingTask;
+    private Runnable reconnectTask;
+    private Runnable watchdogTask;
 
     private String myName = "";
     private String roomId = "";
@@ -72,7 +77,7 @@ public class MainActivity extends Activity {
         list = findViewById(R.id.messageList);
         list.setAdapter(adapter);
 
-        // Android 15 强制边到边，手动给状态栏/输入法让位
+        // Android 15 强制边到边：手动给状态栏和输入法让位
         final View rootView = findViewById(R.id.root);
         rootView.setOnApplyWindowInsetsListener((v, insets) -> {
             int top = insets.getSystemWindowInsetTop();
@@ -116,8 +121,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         manualClose = true;
-        stopPing();
+        stopTimers();
         WsClient c = ws;
+        ws = null;
         if (c != null) c.close();
         super.onDestroy();
     }
@@ -189,6 +195,7 @@ public class MainActivity extends Activity {
         }
         joined = false;
         roomId = "";
+        cancelJoinRetry();
         showLobby();
     }
 
@@ -220,14 +227,32 @@ public class MainActivity extends Activity {
         connect();
     }
 
+    /**
+     * 只允许一条连接：
+     * 1) 建连中直接返回，避免并发建第二条；
+     * 2) 建新连接前先关闭旧的；
+     * 3) 所有回调都用 client == ws 校验，旧连接迟到的消息直接丢弃
+     *    （之前消息显示两遍就是因为没有这层校验）。
+     */
     private void connect() {
         if (manualClose) return;
+        if (connecting) return;
+        connecting = true;
+        final long gen = ++connGen;
+
+        final WsClient old = ws;
+        if (old != null) {
+            ws = null;
+            old.close();
+        }
+
         final WsClient client = new WsClient(HOST, PORT, PATH, new WsClient.Listener() {
             @Override
             public void onOpen() {
-                Log.i("liaotian", "onOpen (thread)");
                 ui.post(() -> {
-                    Log.i("liaotian", "onOpen (ui) pending=" + (pendingAction != null));
+                    if (gen != connGen) return;
+                    connecting = false;
+                    cancelReconnect();
                     retry = 0;
                     setLobbyStatus("");
                     startPing();
@@ -243,12 +268,18 @@ public class MainActivity extends Activity {
 
             @Override
             public void onMessage(final String text) {
-                ui.post(() -> handleMessage(text));
+                ui.post(() -> {
+                    if (gen != connGen) return;  // 旧连接的迟到消息
+                    handleMessage(text);
+                });
             }
 
             @Override
             public void onClosed(String reason) {
                 ui.post(() -> {
+                    if (gen != connGen) return;
+                    connecting = false;
+                    ws = null;
                     stopPing();
                     joined = false;
                     if (manualClose) return;
@@ -263,53 +294,44 @@ public class MainActivity extends Activity {
         });
 
         ws = client;
-        // 看门狗：16 秒还没连上就放弃这次尝试，避免界面一直停在"正在连接"
-        ui.postDelayed(() -> {
-            if (ws == client && !client.isOpen()) {
+        watchdogTask = () -> {
+            if (client == ws && !client.isOpen()) {
+                connecting = false;
                 setLobbyStatus("连接超时，正在重试…");
                 client.close();
             }
-        }, 40000);
+        };
+        ui.postDelayed(watchdogTask, 40000);
+
         new Thread(() -> {
             try {
                 client.connect();
             } catch (Exception e) {
                 ui.post(() -> {
-                    Log.e("liaotian", "connect failed", e);
-                    setLobbyStatus("连接失败：" + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+                    if (gen != connGen) return;
+                    connecting = false;
+                    ws = null;
+                    Log.e("liaotian", "connect failed: " + e.getMessage());
+                    setLobbyStatus("连接失败：" + (e.getMessage() == null ? "未知错误" : e.getMessage()));
                     scheduleReconnect();
                 });
             }
         }, "ws-connect").start();
     }
 
-    private void armJoinRetry() {
-        cancelJoinRetry();
-        joinRetryTask = new Runnable() {
-            @Override
-            public void run() {
-                if (!joined) {
-                    Log.i("liaotian", "join not acked, retrying");
-                    if (lastJoinAction != null) lastJoinAction.run();
-                    ui.postDelayed(this, 6000);
-                }
-            }
-        };
-        ui.postDelayed(joinRetryTask, 6000);
-    }
-
-    private void cancelJoinRetry() {
-        if (joinRetryTask != null) {
-            ui.removeCallbacks(joinRetryTask);
-            joinRetryTask = null;
-        }
-    }
-
     private void scheduleReconnect() {
-        manualClose = false;
+        cancelReconnect();
         int delay = Math.min(1000 * (1 << Math.min(retry, 4)), 15000);
         retry++;
-        ui.postDelayed(this::connect, delay);
+        reconnectTask = this::connect;
+        ui.postDelayed(reconnectTask, delay);
+    }
+
+    private void cancelReconnect() {
+        if (reconnectTask != null) {
+            ui.removeCallbacks(reconnectTask);
+            reconnectTask = null;
+        }
     }
 
     private void sendJoin(String room, String name) {
@@ -329,9 +351,30 @@ public class MainActivity extends Activity {
             toast("还没连上，稍等一下");
             return false;
         }
-        Log.i("liaotian", "send " + o.toString());
         c.send(o.toString());
         return true;
+    }
+
+    private void armJoinRetry() {
+        cancelJoinRetry();
+        joinRetryTask = new Runnable() {
+            @Override
+            public void run() {
+                if (!joined && lastJoinAction != null) {
+                    Log.i("liaotian", "join not acked, retrying");
+                    lastJoinAction.run();
+                    ui.postDelayed(this, 6000);
+                }
+            }
+        };
+        ui.postDelayed(joinRetryTask, 6000);
+    }
+
+    private void cancelJoinRetry() {
+        if (joinRetryTask != null) {
+            ui.removeCallbacks(joinRetryTask);
+            joinRetryTask = null;
+        }
     }
 
     private void startPing() {
@@ -358,13 +401,22 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void stopTimers() {
+        stopPing();
+        cancelJoinRetry();
+        cancelReconnect();
+        if (watchdogTask != null) {
+            ui.removeCallbacks(watchdogTask);
+            watchdogTask = null;
+        }
+    }
+
     // ------------------------------------------------------------ 消息处理
 
     private void handleMessage(String text) {
         try {
             JSONObject o = new JSONObject(text);
             String type = o.optString("type");
-            Log.i("liaotian", "recv " + type);
 
             if ("joined".equals(type)) {
                 roomId = o.optString("room");
