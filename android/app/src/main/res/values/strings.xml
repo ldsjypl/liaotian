@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">聊天室</string>
+    <string name="hint_nick">昵称</string>
+    <string name="hint_room">6 位房号</string>
+    <string name="create_room">＋ 新建房间</string>
+    <string name="join_room">加入</string>
+    <string name="leave">离开</string>
+    <string name="send">发送</string>
+    <string name="hint_input">说点什么…</string>
+</resources>

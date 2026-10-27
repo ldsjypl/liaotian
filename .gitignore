@@ -12,3 +12,13 @@ Thumbs.db
 .idea/
 deploy/room-key.txt
 
+
+# android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+*.apk
+
