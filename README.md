@@ -21,17 +21,21 @@
 ### 三条命令跑起来
 
 ```bash
-# 1) 服务端（x86 或 ARM 都能编）
+# 1) 服务端（x86 或 ARM 都能编；Windows 请用 WSL 或 Linux 虚拟机）
 make -j4 && ./bin/liaotian --port 8081 --web ./web --data ./data
 
-# 2) 浏览器打开
-open http://127.0.0.1:8081
+# 2) 用浏览器打开
+http://127.0.0.1:8081
 
-# 3) 手机装 APK（已在仓库里）
+# 3) 手机装 APK（已在仓库里，直接下载）
+#    https://github.com/ldsjypl/liaotian/raw/main/android/liaotian-1.1.apk
 adb install -r android/liaotian-1.1.apk
 ```
 
 线上地址：<https://ldsjypl.online>（房间号随机，房号不公开）。
+
+> 仓库里已经放了编好的 APK，组员**不需要装 Android Studio** 也能体验；
+> 要改代码再装 Android Studio。
 
 ### 安卓端单独编译
 
