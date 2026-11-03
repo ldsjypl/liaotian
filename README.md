@@ -6,6 +6,45 @@
 **房间模型**：任何人可以开一间房，系统分配一个随机 6 位房号；把房号发给朋友就能进。
 房间空了 2 分钟后自动解散，聊天记录一并删除 —— 不占内存、不占磁盘、不留痕迹。
 
+## 项目总览（给组员）
+
+一套完整的"自建聊天服务"，三个端都在这个仓库里：
+
+| 部分 | 位置 | 说明 |
+|---|---|---|
+| 服务端 | `src/` | C++17 + epoll，零第三方依赖，跑在 ARM 开发板上 |
+| 网页端 | `web/` | 原生 JS，无框架无构建，服务端直接托管 |
+| 安卓端 | `android/` | 纯 Java，APK 在 `android/liaotian-1.1.apk` |
+| 部署 | `deploy/` | systemd / nginx / cloudflared / 看门狗脚本 |
+| 文档 | `docs/design.md` | 分层、房间生命周期、内存预算、协议 |
+
+### 三条命令跑起来
+
+```bash
+# 1) 服务端（x86 或 ARM 都能编）
+make -j4 && ./bin/liaotian --port 8081 --web ./web --data ./data
+
+# 2) 浏览器打开
+open http://127.0.0.1:8081
+
+# 3) 手机装 APK（已在仓库里）
+adb install -r android/liaotian-1.1.apk
+```
+
+线上地址：<https://ldsjypl.online>（房间号随机，房号不公开）。
+
+### 安卓端单独编译
+
+```bash
+cd android
+# local.properties 里的 sdk.dir 指到你本机 Android SDK
+gradlew.bat assembleDebug        # Windows
+./gradlew assembleDebug          # macOS / Linux
+```
+
+需要 JDK 21 + Android SDK（platform 36 / build-tools 36.0.0），产物在
+`android/app/build/outputs/apk/debug/app-debug.apk`。
+
 ## 功能
 
 | 功能 | 说明 |

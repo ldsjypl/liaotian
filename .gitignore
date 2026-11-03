@@ -12,7 +12,6 @@ Thumbs.db
 .idea/
 deploy/room-key.txt
 
-
 # android
 android/.gradle/
 android/build/
@@ -20,5 +19,8 @@ android/app/build/
 android/local.properties
 android/.idea/
 *.iml
-*.apk
 
+# APKs are ignored by default ...
+*.apk
+# ... except the release package handed out to the team
+!android/liaotian-*.apk
